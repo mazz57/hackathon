@@ -1,52 +1,84 @@
-const CheckIn = require('../models/CheckIn');
-const { notifyContacts } = require('./checkInNotificationService');
+const CheckIn = require("../models/CheckIn");
+const { notifyContacts } = require("./checkInNotificationService");
 
 let intervalId;
+let isRunning = false;
 
 const startScheduler = () => {
-    console.log('Check-in scheduler started...');
+  if (isRunning) {
+    console.log("⚠️  Check-in scheduler already running");
+    return;
+  }
 
-    // Run every 60 seconds
-    intervalId = setInterval(async () => {
+  console.log("✅ Check-in scheduler started");
+  isRunning = true;
+
+  // Run every 60 seconds
+  intervalId = setInterval(async () => {
+    try {
+      const now = new Date();
+
+      // Find active check-ins where nextCheckInTime < now
+      const activeCheckIns = await CheckIn.find({
+        status: "active",
+        nextCheckInTime: { $lt: now },
+      }).populate("user");
+
+      if (activeCheckIns.length > 0) {
+        console.log(`📋 Processing ${activeCheckIns.length} overdue check-ins`);
+      }
+
+      for (const checkIn of activeCheckIns) {
         try {
-            const now = new Date();
+          const gracePeriodMs = (checkIn.gracePeriodMinutes || 5) * 60 * 1000;
+          const overdueTime = new Date(
+            checkIn.nextCheckInTime.getTime() + gracePeriodMs
+          );
 
-            // Find active check-ins where nextCheckInTime < now
-            const activeCheckIns = await CheckIn.find({
-                status: 'active',
-                nextCheckInTime: { $lt: now }
-            }).populate('user');
+          if (now > overdueTime) {
+            console.log(
+              `⚠️  Check-in overdue for user ${
+                checkIn.user?.name || "Unknown"
+              } (ID: ${checkIn._id})`
+            );
 
-            for (const checkIn of activeCheckIns) {
-                const gracePeriodMs = checkIn.gracePeriodMinutes * 60 * 1000;
-                const overdueTime = new Date(checkIn.nextCheckInTime.getTime() + gracePeriodMs);
+            // Mark as missed immediately to prevent double-processing
+            checkIn.status = "missed";
+            checkIn.missedCount = (checkIn.missedCount || 0) + 1;
+            await checkIn.save();
 
-                if (now > overdueTime) {
-                    console.log(`Check-in overdue for user ${checkIn.user.name} (ID: ${checkIn._id})`);
-
-                    // Mark as missed immediately to prevent double-processing
-                    checkIn.status = 'missed';
-                    checkIn.missedCount += 1;
-                    await checkIn.save();
-
-                    // Trigger SMS notification
-                    await notifyContacts(checkIn);
-                }
-            }
-        } catch (error) {
-            console.error('Error in check-in scheduler:', error);
+            // Trigger SMS notification (don't await to prevent blocking)
+            notifyContacts(checkIn).catch((err) => {
+              console.error(
+                `❌ Failed to notify contacts for check-in ${checkIn._id}:`,
+                err.message
+              );
+            });
+          }
+        } catch (checkInError) {
+          console.error(
+            `❌ Error processing check-in ${checkIn._id}:`,
+            checkInError.message
+          );
+          // Continue processing other check-ins
         }
-    }, 60000); // runs every minute
+      }
+    } catch (error) {
+      console.error("❌ Error in check-in scheduler:", error.message);
+      // Don't crash the scheduler - it will retry on next interval
+    }
+  }, 60000); // runs every minute
 };
 
 const stopScheduler = () => {
-    if (intervalId) {
-        clearInterval(intervalId);
-        console.log('Check-in scheduler stopped.');
-    }
+  if (intervalId) {
+    clearInterval(intervalId);
+    isRunning = false;
+    console.log("✅ Check-in scheduler stopped");
+  }
 };
 
 module.exports = {
-    startScheduler,
-    stopScheduler
+  startScheduler,
+  stopScheduler,
 };

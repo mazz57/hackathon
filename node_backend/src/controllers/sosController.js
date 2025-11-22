@@ -5,105 +5,204 @@ const smsService = require("../services/smsService");
 // @route   POST /sos/trigger
 // @access  Private
 const triggerSOS = async (req, res) => {
-  const { location, triggerType, latitude, longitude } = req.body;
-  const user = req.user;
+  try {
+    const { location, triggerType, latitude, longitude } = req.body;
+    const user = req.user;
 
-  // Support both formats: {location: {lat, lon}} or {latitude, longitude}
-  let sosLocation;
-  if (location && location.lat && location.lon) {
-    sosLocation = location;
-  } else if (latitude !== undefined && longitude !== undefined) {
-    sosLocation = { lat: latitude, lon: longitude };
-  } else {
-    res.status(400);
-    throw new Error(
-      "Location is required (provide either location.lat/lon or latitude/longitude)"
+    if (!user) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
+
+    // Support both formats: {location: {lat, lon}} or {latitude, longitude}
+    let sosLocation;
+    if (location && location.lat !== undefined && location.lon !== undefined) {
+      sosLocation = location;
+    } else if (latitude !== undefined && longitude !== undefined) {
+      sosLocation = { lat: latitude, lon: longitude };
+    } else {
+      return res.status(400).json({
+        message:
+          "Location is required (provide either location.lat/lon or latitude/longitude)",
+      });
+    }
+
+    console.log(
+      `📍 SOS triggered by user: ${user._id} at ${sosLocation.lat}, ${sosLocation.lon}`
     );
+
+    // 1. Save SOS Event
+    let sosEvent;
+    try {
+      sosEvent = await dbService.saveSOS({
+        user: user._id,
+        location: sosLocation,
+        triggerType: triggerType || "MANUAL",
+      });
+      console.log(`✅ SOS event saved: ${sosEvent._id}`);
+    } catch (error) {
+      console.error("❌ Failed to save SOS event:", error.message);
+      // Continue even if save fails - SMS is more critical
+    }
+
+    // 2. Get Contacts
+    let contacts = [];
+    try {
+      contacts = await dbService.getContacts(user._id);
+      console.log(`📞 Found ${contacts.length} emergency contacts`);
+    } catch (error) {
+      console.error("❌ Failed to get contacts:", error.message);
+      return res.status(500).json({
+        message: "Failed to retrieve emergency contacts",
+        error: error.message,
+      });
+    }
+
+    if (contacts.length === 0) {
+      return res.status(400).json({
+        message: "No emergency contacts found. Please add contacts first.",
+        sosId: sosEvent?._id,
+      });
+    }
+
+    const phoneNumbers = contacts.map((c) => c.phone).filter(Boolean);
+
+    // 3. Send SMS
+    let smsResults = [];
+    try {
+      const message = `🚨 SOS ALERT! ${
+        user.name
+      } needs help!\nLocation: https://maps.google.com/?q=${sosLocation.lat},${
+        sosLocation.lon
+      }\nTime: ${new Date().toLocaleString()}`;
+
+      smsResults = await smsService.sendBulkSMS(phoneNumbers, message);
+
+      const successCount = smsResults.filter((r) => r.success).length;
+      console.log(
+        `📊 SMS sent: ${successCount}/${smsResults.length} successful`
+      );
+    } catch (error) {
+      console.error("❌ SMS sending failed:", error.message);
+      // Don't fail the request - SOS was still logged
+    }
+
+    res.status(201).json({
+      message: "SOS alert triggered",
+      sosId: sosEvent?._id,
+      contactsNotified: smsResults.filter((r) => r.success).length,
+      totalContacts: contacts.length,
+      results: smsResults,
+      location: sosLocation,
+    });
+  } catch (error) {
+    console.error("❌ SOS trigger error:", error.message);
+    res.status(500).json({
+      message: "Failed to trigger SOS",
+      error: error.message,
+    });
   }
-
-  console.log("Triggering SOS for user:", user._id);
-
-  // 1. Save SOS Event
-  console.log("Saving SOS event...");
-  const sosEvent = await dbService.saveSOS({
-    user: user._id,
-    location: sosLocation,
-    triggerType,
-  });
-  console.log("SOS event saved:", sosEvent._id);
-
-  // 2. Get Contacts
-  console.log("Getting contacts...");
-  const contacts = await dbService.getContacts(user._id);
-  console.log("Contacts found:", contacts.length);
-  const phoneNumbers = contacts.map((c) => c.phone);
-
-  // 3. Send SMS
-  console.log("Sending SMS to:", phoneNumbers);
-  const message = `SOS! ${user.name} needs help! Location: https://maps.google.com/?q=${sosLocation.lat},${sosLocation.lon}`;
-  const smsResults = await smsService.sendBulkSMS(phoneNumbers, message);
-  console.log("SMS Results:", smsResults);
-
-  // 4. Update SOS with SMS status (Optional: In a real app, we'd update the document)
-  // For now, we just return the results.
-
-  res.status(201).json({
-    sosId: sosEvent._id,
-    smsSent: smsResults.length,
-    results: smsResults,
-  });
 };
 
 // @desc    SMS Fallback Trigger
 // @route   POST /sos/sms-trigger
-// @access  Public (or protected with a special API key if possible, but usually Public for fallback)
+// @access  Public (for low-network scenarios)
 const smsFallbackTrigger = async (req, res) => {
-  // This endpoint simulates receiving an SMS webhook or a direct request from the app
-  // when data connection is flaky but a small HTTP request might make it.
-  // Or it could be used by a separate SMS gateway.
+  try {
+    const { userId, phone, location, triggerType, latitude, longitude } =
+      req.body;
 
-  // For this implementation, we assume the app sends this.
-  const { userId, phone, location, triggerType, latitude, longitude } =
-    req.body;
+    // Find user by userId or phone
+    let user;
+    try {
+      if (userId) {
+        user = await dbService.getUserById(userId);
+      } else if (phone) {
+        user = await dbService.getUserByPhone(phone);
+      } else {
+        return res.status(400).json({
+          message: "Either userId or phone is required",
+        });
+      }
 
-  // Find user by userId or phone
-  let user;
-  if (userId) {
-    user = await dbService.getUserById(userId);
-  } else if (phone) {
-    user = await dbService.getUserByPhone(phone);
-  } else {
-    res.status(400);
-    throw new Error("Either userId or phone is required");
-  }
+      if (!user) {
+        return res.status(404).json({
+          message: "User not found",
+        });
+      }
+    } catch (error) {
+      console.error("❌ User lookup failed:", error.message);
+      return res.status(500).json({
+        message: "Failed to find user",
+        error: error.message,
+      });
+    }
 
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
-  }
+    // Support both location formats
+    let sosLocation;
+    if (location && location.lat !== undefined && location.lon !== undefined) {
+      sosLocation = location;
+    } else if (latitude !== undefined && longitude !== undefined) {
+      sosLocation = { lat: latitude, lon: longitude };
+    } else {
+      return res.status(400).json({
+        message:
+          "Location is required (provide either location.lat/lon or latitude/longitude)",
+      });
+    }
 
-  // Support both location formats
-  let sosLocation;
-  if (location && location.lat && location.lon) {
-    sosLocation = location;
-  } else if (latitude !== undefined && longitude !== undefined) {
-    sosLocation = { lat: latitude, lon: longitude };
-  } else {
-    res.status(400);
-    throw new Error(
-      "Location is required (provide either location.lat/lon or latitude/longitude)"
-    );
-  }
+    console.log(`📍 Low-network SOS from user: ${user._id}`);
 
-  const contacts = await dbService.getContacts(user._id);
-  const phoneNumbers = contacts.map((c) => c.phone);
+    // Get contacts
+    let contacts = [];
+    try {
+      contacts = await dbService.getContacts(user._id);
+    } catch (error) {
+      console.error("❌ Failed to get contacts:", error.message);
+      return res.status(500).json({
+        message: "Failed to retrieve emergency contacts",
+        error: error.message,
+      });
+    }
 
-  const message = `${user.name} triggered an emergency alert.
+    if (contacts.length === 0) {
+      return res.status(400).json({
+        message: "No emergency contacts found",
+      });
+    }
+
+    const phoneNumbers = contacts.map((c) => c.phone).filter(Boolean);
+
+    // Send SMS
+    let smsResults = [];
+    try {
+      const message = `🚨 EMERGENCY! ${
+        user.name
+      } triggered a low-network SOS alert.
 Location: https://maps.google.com/?q=${sosLocation.lat},${sosLocation.lon}
+Time: ${new Date().toLocaleString()}
 Please reach them immediately.`;
-  const smsResults = await smsService.sendBulkSMS(phoneNumbers, message);
 
-  res.status(200).json({ status: "queued", results: smsResults });
+      smsResults = await smsService.sendBulkSMS(phoneNumbers, message);
+    } catch (error) {
+      console.error("❌ SMS sending failed:", error.message);
+    }
+
+    const successCount = smsResults.filter((r) => r.success).length;
+
+    res.status(200).json({
+      message: "Low-network SOS processed",
+      status: successCount > 0 ? "sent" : "failed",
+      contactsNotified: successCount,
+      totalContacts: contacts.length,
+      results: smsResults,
+    });
+  } catch (error) {
+    console.error("❌ SMS fallback error:", error.message);
+    res.status(500).json({
+      message: "Failed to process low-network SOS",
+      error: error.message,
+    });
+  }
 };
 
 module.exports = {
