@@ -8,6 +8,7 @@ import GeofenceScreen from "../screens/GeofenceScreen";
 import AutoCheckInScreen from "../screens/AutoCheckInScreen";
 import SafeRouteScreen from "../screens/SafeRouteScreen";
 import LocationViewerScreen from "../screens/LocationViewerScreen";
+import PricingScreen from "../screens/PricingScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -25,6 +26,7 @@ export default function RootNavigator() {
       <Stack.Screen name="AutoCheckIn" component={AutoCheckInScreen} />
       <Stack.Screen name="SafeRoute" component={SafeRouteScreen} />
       <Stack.Screen name="LocationViewer" component={LocationViewerScreen} />
+      <Stack.Screen name="Pricing" component={PricingScreen} />
     </Stack.Navigator>
   );
 }

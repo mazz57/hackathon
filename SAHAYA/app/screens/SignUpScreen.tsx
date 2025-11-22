@@ -9,14 +9,11 @@ import {
   Platform,
   Animated,
   Easing,
-  Dimensions,
   Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { authService } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const { width, height } = Dimensions.get("window");
+import { authService } from "../../services/api";
 
 export default function SignUpScreen() {
   const navigation = useNavigation<any>();

@@ -2,14 +2,14 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
-  ScrollView,
-  TouchableOpacity,
   TextInput,
-  Alert,
+  TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
+  Alert,
 } from "react-native";
-import { contactService } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { contactService } from "../../services/api";
 
 export default function ContactsScreen() {
   const [contacts, setContacts] = useState<any[]>([]);

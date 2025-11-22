@@ -3,11 +3,11 @@ import {
   View,
   Text,
   ActivityIndicator,
-  Linking,
   TouchableOpacity,
+  Linking,
 } from "react-native";
-import { locationService } from "../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { locationService } from "../../services/api";
 
 export default function LocationViewerScreen() {
   const [location, setLocation] = useState<any>(null);

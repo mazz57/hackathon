@@ -2,8 +2,7 @@ import axios from "axios";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// CHANGE THIS TO YOUR PC's LAN IP (VERY IMPORTANT)
-const LOCAL_IP = "10.1.20.62";
+const LOCAL_IP = "192.168.40.87";
 
 // Auto-detect correct base URL
 const getBaseUrl = () => {
@@ -68,6 +67,12 @@ export const tripService = {
   startTrip: (data: any) => api.post("/trips/start", data),
   endTrip: (data: any) => api.post("/trips/end", data),
   sendAlert: (data: any) => api.post("/trips/alert", data),
+
+  updateLocation: (data: {
+    tripId: string;
+    latitude: number;
+    longitude: number;
+  }) => api.post("/trips/location", data),
 };
 
 export default api;

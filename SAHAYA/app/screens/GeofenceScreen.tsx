@@ -6,20 +6,20 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
-  TextInput,
   RefreshControl,
+  TextInput,
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { geofenceService } from "../services/api";
-import { startGeofenceWatcher } from "../utils/GeofenceWatcher";
+import { geofenceService } from "../../services/api";
+import { startGeofenceWatcher } from "../../utils/GeofenceWatcher";
 
 export default function GeofenceScreen() {
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
   const [geofences, setGeofences] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [fenceName, setFenceName] = useState("");
+  const [loading, setLoading] = useState(false);
   const [radius, setRadius] = useState("100");
 
   useEffect(() => {

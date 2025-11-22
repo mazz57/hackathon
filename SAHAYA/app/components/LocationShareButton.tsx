@@ -1,13 +1,13 @@
 import React, { useState } from "react";
 import {
-  TouchableOpacity,
+  View,
   Text,
+  TouchableOpacity,
   ActivityIndicator,
   Alert,
-  View,
 } from "react-native";
 import * as Location from "expo-location";
-import { locationService } from "../services/api";
+import { locationService } from "../../services/api";
 
 export default function LocationShareButton() {
   const [loading, setLoading] = useState(false);

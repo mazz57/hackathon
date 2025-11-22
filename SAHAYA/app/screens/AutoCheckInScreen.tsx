@@ -3,16 +3,15 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
-  ScrollView,
+  Alert,
 } from "react-native";
 import * as Location from "expo-location";
-import { tripService } from "../services/api";
+import { tripService } from "../../services/api";
 
 export default function AutoCheckInScreen() {
-  const [tripId, setTripId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [tripId, setTripId] = useState<string | null>(null);
 
   const handleStartTrip = async () => {
     setLoading(true);

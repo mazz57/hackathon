@@ -5,10 +5,9 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
-  Animated,
 } from "react-native";
 import * as Location from "expo-location";
-import { sosService } from "../services/api";
+import { sosService } from "../../services/api";
 
 export default function SOSButton() {
   const [loading, setLoading] = useState(false);

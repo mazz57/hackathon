@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { sosService } from "../services/api";
+import { sosService } from "../../services/api";
 
 export default function LowNetworkSOS() {
   const [loading, setLoading] = useState(false);

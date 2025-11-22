@@ -1,10 +1,12 @@
 import React from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import SOSButton from "../components/SOSButton";
 import LocationShareButton from "../components/LocationShareButton";
 import { QuickActionCard, StatusCard } from "../components/HomeComponents";
 
 export default function HomeScreen() {
+  const navigation = useNavigation<any>();
   return (
     <View className="flex-1 bg-white">
       <ScrollView className="flex-1 p-6">
@@ -26,6 +28,25 @@ export default function HomeScreen() {
           </Text>
 
           <LocationShareButton />
+
+          {/* Premium Banner */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Pricing")}
+            className="bg-gradient-to-r from-purple-600 to-indigo-600 mb-6 rounded-xl p-4 flex-row items-center justify-between shadow-sm"
+            style={{ backgroundColor: "#7C3AED" }} // Fallback color
+          >
+            <View>
+              <Text className="text-white font-bold text-lg">
+                Go Premium 👑
+              </Text>
+              <Text className="text-purple-100 text-sm">
+                Unlock advanced safety features
+              </Text>
+            </View>
+            <View className="bg-white/20 px-3 py-1 rounded-full">
+              <Text className="text-white font-semibold">Upgrade</Text>
+            </View>
+          </TouchableOpacity>
 
           <View className="flex-row flex-wrap justify-between">
             <QuickActionCard
