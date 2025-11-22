@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import { tripService } from "../../services/api";
+import LeafletMap from "../components/LeafletMap";
 
 // Helper to calculate distance (Haversine formula)
 const calculateDistance = (
@@ -49,7 +50,6 @@ export default function SafeRouteScreen() {
     null
   );
 
-  // Mock points for now since we don't have a map picker yet
   const [pointA, setPointA] = useState<{
     latitude: number;
     longitude: number;
@@ -59,7 +59,25 @@ export default function SafeRouteScreen() {
     longitude: number;
   } | null>(null);
 
+  const [currentLocation, setCurrentLocation] = useState<{
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+
   useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission Denied", "Location permission is required.");
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({});
+      setCurrentLocation({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+      });
+    })();
+
     // Cleanup on unmount
     return () => {
       if (locationSubscription.current) {
@@ -87,8 +105,6 @@ export default function SafeRouteScreen() {
   };
 
   const handleSetPointB = async () => {
-    // For demo, we'll just set a point slightly away or let user "mock" it
-    // In real app, this would be from map tap or search
     const coords = await getCurrentLocation();
     if (coords) {
       // Mocking a destination 1km away for testing
@@ -102,7 +118,6 @@ export default function SafeRouteScreen() {
 
   const generateRoutePoints = () => {
     if (!pointA || !pointB) return [];
-    // Just return start and end for now
     return [
       { lat: pointA.latitude, lon: pointA.longitude },
       { lat: pointB.latitude, lon: pointB.longitude },
@@ -122,7 +137,7 @@ export default function SafeRouteScreen() {
       const routePoints = generateRoutePoints();
       const response = await tripService.startTrip({
         startLocation: { lat: pointA.latitude, lon: pointA.longitude },
-        destination: "Destination", // In real app, use address
+        destination: "Destination",
         estimatedDuration: 30,
         routePath: routePoints,
       });
@@ -142,6 +157,8 @@ export default function SafeRouteScreen() {
         async (location) => {
           try {
             const { latitude, longitude } = location.coords;
+            setCurrentLocation({ latitude, longitude });
+
             const currentTripId = tripIdRef.current;
             if (!currentTripId) {
               return;
@@ -208,96 +225,140 @@ export default function SafeRouteScreen() {
     setDuration("0");
   };
 
+  // Prepare markers for the map
+  const markers = [];
+  if (pointA) {
+    markers.push({
+      latitude: pointA.latitude,
+      longitude: pointA.longitude,
+      title: "Start",
+      color: "green",
+    });
+  }
+  if (pointB) {
+    markers.push({
+      latitude: pointB.latitude,
+      longitude: pointB.longitude,
+      title: "Destination",
+      color: "red",
+    });
+  }
+
+  // Prepare polyline
+  const polyline = pointA && pointB ? [pointA, pointB] : [];
+
   return (
-    <View className="flex-1 bg-white p-6">
-      <Text className="text-3xl font-bold text-gray-900 mb-6">Safe Route</Text>
+    <View style={styles.container}>
+      <LeafletMap
+        markers={markers}
+        polyline={polyline}
+        polylineColor={isDeviated ? "red" : "#4A90E2"}
+        center={currentLocation || undefined}
+        showUserLocation={true}
+      />
 
-      {step === "setup" ? (
-        <View className="flex-1 justify-center space-y-6">
-          <View>
-            <Text className="text-gray-600 mb-2">1. Set Start Point</Text>
-            <TouchableOpacity
-              onPress={handleSetPointA}
-              className={`p-4 rounded-xl border-2 ${
-                pointA ? "border-green-500 bg-green-50" : "border-gray-200"
-              }`}
-            >
-              <Text className="font-semibold text-center">
-                {pointA ? "Start Point Set ✓" : "Set Current Location as Start"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+      <View style={styles.overlay}>
+        <View className="bg-white p-4 rounded-t-3xl shadow-lg">
+          <Text className="text-2xl font-bold text-gray-900 mb-4 text-center">
+            Safe Route
+          </Text>
 
-          <View>
-            <Text className="text-gray-600 mb-2">2. Set Destination</Text>
-            <TouchableOpacity
-              onPress={handleSetPointB}
-              className={`p-4 rounded-xl border-2 ${
-                pointB ? "border-green-500 bg-green-50" : "border-gray-200"
-              }`}
-            >
-              <Text className="font-semibold text-center">
-                {pointB ? "Destination Set ✓" : "Set Destination (Mock)"}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          {step === "setup" ? (
+            <View className="space-y-4">
+              <View className="flex-row justify-between space-x-2">
+                <TouchableOpacity
+                  onPress={handleSetPointA}
+                  className={`flex-1 p-3 rounded-xl border ${
+                    pointA ? "border-green-500 bg-green-50" : "border-gray-200"
+                  }`}
+                >
+                  <Text className="font-semibold text-center text-sm">
+                    {pointA ? "Start Set ✓" : "Set Start"}
+                  </Text>
+                </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={startTracking}
-            disabled={loading || !pointA || !pointB}
-            className={`py-4 rounded-xl mt-8 ${
-              loading || !pointA || !pointB ? "bg-gray-300" : "bg-pink-500"
-            }`}
-          >
-            {loading ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text className="text-white font-bold text-center text-lg">
-                Start Safe Route
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <View className="flex-1">
-          <View
-            className={`p-6 rounded-2xl mb-6 ${
-              isDeviated ? "bg-red-100 border-red-300" : "bg-green-100"
-            }`}
-          >
-            <Text
-              className={`text-center font-bold text-xl ${
-                isDeviated ? "text-red-700" : "text-green-700"
-              }`}
-            >
-              {isDeviated ? "OFF ROUTE!" : "ON ROUTE"}
-            </Text>
-            <Text className="text-center text-gray-600 mt-2">
-              Monitoring your location...
-            </Text>
-          </View>
+                <TouchableOpacity
+                  onPress={handleSetPointB}
+                  className={`flex-1 p-3 rounded-xl border ${
+                    pointB ? "border-green-500 bg-green-50" : "border-gray-200"
+                  }`}
+                >
+                  <Text className="font-semibold text-center text-sm">
+                    {pointB ? "Dest Set ✓" : "Set Dest"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-          <View className="flex-row justify-between mb-8">
-            <View className="items-center">
-              <Text className="text-2xl font-bold">{distance} km</Text>
-              <Text className="text-gray-500">Distance</Text>
+              <TouchableOpacity
+                onPress={startTracking}
+                disabled={loading || !pointA || !pointB}
+                className={`py-3 rounded-xl ${
+                  loading || !pointA || !pointB ? "bg-gray-300" : "bg-pink-500"
+                }`}
+              >
+                {loading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text className="text-white font-bold text-center text-lg">
+                    Start Trip
+                  </Text>
+                )}
+              </TouchableOpacity>
             </View>
-            <View className="items-center">
-              <Text className="text-2xl font-bold">{duration} min</Text>
-              <Text className="text-gray-500">Duration</Text>
-            </View>
-          </View>
+          ) : (
+            <View>
+              <View
+                className={`p-3 rounded-xl mb-4 ${
+                  isDeviated
+                    ? "bg-red-100 border border-red-300"
+                    : "bg-green-100 border border-green-300"
+                }`}
+              >
+                <Text
+                  className={`text-center font-bold ${
+                    isDeviated ? "text-red-700" : "text-green-700"
+                  }`}
+                >
+                  {isDeviated ? "OFF ROUTE!" : "ON ROUTE"}
+                </Text>
+              </View>
 
-          <TouchableOpacity
-            onPress={stopTracking}
-            className="bg-gray-900 py-4 rounded-xl"
-          >
-            <Text className="text-white font-bold text-center text-lg">
-              End Trip
-            </Text>
-          </TouchableOpacity>
+              <View className="flex-row justify-between mb-4 px-4">
+                <View className="items-center">
+                  <Text className="text-xl font-bold">{distance} km</Text>
+                  <Text className="text-gray-500 text-xs">Distance</Text>
+                </View>
+                <View className="items-center">
+                  <Text className="text-xl font-bold">{duration} min</Text>
+                  <Text className="text-gray-500 text-xs">Duration</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={stopTracking}
+                className="bg-gray-900 py-3 rounded-xl"
+              >
+                <Text className="text-white font-bold text-center text-lg">
+                  End Trip
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
-      )}
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
+  overlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+});
