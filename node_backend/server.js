@@ -1,18 +1,21 @@
+// MUST BE FIRST LINE
+require("dotenv").config();
+
 const express = require("express");
-const dotenv = require("dotenv");
 const cors = require("cors");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
-const connectDB = require("./src/config/db");
-const { notFound, errorHandler } = require("./src/middleware/validateRequest"); // Reusing existing middleware file if appropriate, or creating new error middleware
 
-// Load env vars
-dotenv.config();
+const connectDB = require("./src/config/db");
+const { notFound, errorHandler } = require("./src/middleware/validateRequest");
+const { startScheduler } = require("./src/services/checkInScheduler");
 
 // Connect to database
 connectDB();
+startScheduler();
 
 const app = express();
+
 
 // Middleware
 app.use(express.json());

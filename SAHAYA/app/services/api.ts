@@ -65,9 +65,9 @@ export const geofenceService = {
 };
 
 export const tripService = {
-  startTrip: (data: any) => api.post("/trip/start", data),
-  endTrip: (data: any) => api.post("/trip/end", data),
-  sendAlert: (data: any) => api.post("/trip/alert", data),
+  startTrip: (data: any) => api.post("/trips/start", data),
+  endTrip: (data: any) => api.post("/trips/end", data),
+  sendAlert: (data: any) => api.post("/trips/alert", data),
 };
 
 export default api;
